@@ -1,18 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"><title>NEON STRIKE: JUMP UPDATE</title>
+    <meta charset="UTF-8"><title>CYBER-STRIKE PRO</title>
     <style>
         body { margin: 0; overflow: hidden; background: #020205; font-family: 'Courier New', monospace; }
-        #crosshair { position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; border: 2px solid #0ff; transform: translate(-50%, -50%); pointer-events: none; }
+        
+        /* NEW VECTOR CROSSHAIR */
+        #crosshair {
+            position: absolute; top: 50%; left: 50%;
+            width: 20px; height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        #crosshair::before, #crosshair::after {
+            content: ''; position: absolute; background: #0ff; box-shadow: 0 0 5px #0ff;
+        }
+        #crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; } /* Horizontal */
+        #crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; } /* Vertical */
+
+        #ui { position: absolute; bottom: 20px; left: 20px; color: #0ff; font-size: 18px; text-shadow: 0 0 8px #0ff; }
         #instructions { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #0ff; background: rgba(0,0,0,0.9); cursor: pointer; z-index: 10; text-align: center; }
-        #score-card { position: absolute; top: 20px; left: 20px; color: #0ff; font-size: 20px; }
     </style>
 </head>
 <body>
-    <div id="score-card">TARGETS DESTROYED: <span id="score">0</span></div>
     <div id="crosshair"></div>
-    <div id="instructions"><h1>NEURAL LINK ACTIVE</h1><p>WASD: MOVE | SPACE: JUMP | CLICK: SHOOT</p></div>
+    <div id="ui">THREATS NEUTRALIZED: <span id="score">0</span></div>
+    <div id="instructions"><h1>SYSTEM BOOT COMPLETE</h1><p>CLICK TO ENGAGE NEURAL LINK</p></div>
 
     <script type="importmap">
         { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
@@ -22,43 +35,48 @@
         import * as THREE from 'three';
         import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-        // --- 1. SETUP ---
+        // --- 1. CORE SETUP ---
         const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x020205, 0.08);
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-        const grid = new THREE.GridHelper(200, 50, 0x00ffff, 0x002222);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const grid = new THREE.GridHelper(500, 100, 0x00ffff, 0x002222);
         scene.add(grid);
 
-        // --- 2. PLAYER PHYSICS VARIABLES ---
+        // --- 2. SMOOTH MOVEMENT VARIABLES ---
         let moveFwd = false, moveBwd = false, moveL = false, moveR = false;
         let canJump = false;
-        let playerVelocity = new THREE.Vector3();
-        const GRAVITY = 30.0;
-        const JUMP_FORCE = 12.0;
+        
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
         const PLAYER_HEIGHT = 1.6;
-
         camera.position.y = PLAYER_HEIGHT;
 
         // --- 3. THE GUN ---
-        const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.5), new THREE.MeshStandardMaterial({ color: 0x555555 }));
-        gun.position.set(0.3, -0.3, -0.6);
-        camera.add(gun);
+        const gunContainer = new THREE.Group();
+        const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.6), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+        const gunGlow = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.5), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
+        gunGlow.position.z = -0.1;
+        gunContainer.add(gunBody, gunGlow);
+        gunContainer.position.set(0.4, -0.3, -0.6);
+        camera.add(gunContainer);
         scene.add(camera);
 
         // --- 4. TARGETS ---
         const targets = [];
         let score = 0;
-        for(let i=0; i<10; i++) {
-            const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true }));
-            mesh.position.set(Math.random()*30-15, 1, Math.random()*-30-10);
-            mesh.userData = { vY: 0, phase: Math.random() * Math.PI * 2 };
-            scene.add(mesh);
-            targets.push(mesh);
+        for(let i=0; i<12; i++) {
+            const t = new THREE.Mesh(new THREE.OctahedronGeometry(0.6), new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true }));
+            t.position.set(Math.random()*40-20, 1, Math.random()*-40-10);
+            t.userData = { vY: 0, phase: Math.random() * 5 };
+            scene.add(t);
+            targets.push(t);
         }
 
         // --- 5. CONTROLS ---
@@ -72,10 +90,7 @@
             if (e.code === 'KeyS') moveBwd = true;
             if (e.code === 'KeyA') moveL = true;
             if (e.code === 'KeyD') moveR = true;
-            if (e.code === 'Space' && canJump === true) {
-                playerVelocity.y += JUMP_FORCE;
-                canJump = false;
-            }
+            if (e.code === 'Space' && canJump) { velocity.y += 12; canJump = false; }
         });
         document.addEventListener('keyup', (e) => {
             if (e.code === 'KeyW') moveFwd = false;
@@ -88,17 +103,17 @@
         const raycaster = new THREE.Raycaster();
         window.addEventListener('mousedown', () => {
             if (!controls.isLocked) return;
-            gun.position.z += 0.2; // Kickback
+            gunContainer.position.z += 0.15; // Kickback
             raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
             const hits = raycaster.intersectObjects(targets);
             if(hits.length > 0) {
-                hits[0].object.position.set(Math.random()*40-20, 1, Math.random()*-30-10);
+                hits[0].object.position.set(Math.random()*40-20, 1, Math.random()*-40-20);
                 score++;
                 document.getElementById('score').innerText = score;
             }
         });
 
-        // --- 7. ANIMATION LOOP ---
+        // --- 7. THE ANIMATION LOOP ---
         const clock = new THREE.Clock();
 
         function animate() {
@@ -106,41 +121,50 @@
             const delta = clock.getDelta();
 
             if (controls.isLocked) {
-                // Player movement
-                const speed = 15.0;
-                if (moveFwd) controls.moveForward(speed * delta);
-                if (moveBwd) controls.moveForward(-speed * delta);
-                if (moveR) controls.moveRight(speed * delta);
-                if (moveL) controls.moveRight(-speed * delta);
+                // Apply Friction (Stops the sliding)
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+                velocity.y -= 30.0 * delta; // Gravity
 
-                // Player Jump Physics
-                playerVelocity.y -= GRAVITY * delta; // Apply Gravity
-                camera.position.y += playerVelocity.y * delta; // Apply Velocity
+                direction.z = Number(moveFwd) - Number(moveBwd);
+                direction.x = Number(moveR) - Number(moveL);
+                direction.normalize();
 
+                // Apply Acceleration
+                if (moveFwd || moveBwd) velocity.z -= direction.z * 150.0 * delta;
+                if (moveL || moveR) velocity.x -= direction.x * 150.0 * delta;
+
+                // Apply Velocity to Movement
+                controls.moveRight(-velocity.x * delta);
+                controls.moveForward(-velocity.z * delta);
+
+                // Vertical (Jump) Logic
+                camera.position.y += (velocity.y * delta);
                 if (camera.position.y < PLAYER_HEIGHT) {
-                    playerVelocity.y = 0;
+                    velocity.y = 0;
                     camera.position.y = PLAYER_HEIGHT;
                     canJump = true;
                 }
 
-                // Gun Recoil Return
-                gun.position.z += (-0.6 - gun.position.z) * 0.1;
+                // Smooth gun recoil recovery
+                gunContainer.position.z += (-0.6 - gunContainer.position.z) * 0.1;
             }
 
-            // Target Movement: Move left/right and jump randomly
+            // Animate Targets
             targets.forEach(t => {
-                t.position.x += Math.sin(Date.now() * 0.001 + t.userData.phase) * 0.05;
-                
-                // Random Target Jump
-                if(Math.random() < 0.01 && t.position.y <= 1) t.userData.vY = 10;
-                t.userData.vY -= 20 * delta;
-                t.position.y += t.userData.vY * delta;
-                if(t.position.y < 1) t.position.y = 1;
+                t.rotation.y += delta;
+                t.position.y = 1.5 + Math.sin(Date.now() * 0.002 + t.userData.phase) * 1;
             });
 
             renderer.render(scene, camera);
         }
         animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
     </script>
 </body>
 </html>
