@@ -1,18 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"><title>CYBER-STRIKE 3D</title>
+    <meta charset="UTF-8"><title>FIXED 3D SHOOTER</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; }
-        #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border: 1px solid #0ff; transform: translate(-50%, -50%); pointer-events: none; }
-        #ui { position: absolute; bottom: 20px; left: 20px; color: #0ff; text-shadow: 0 0 5px #0ff; }
-        #instructions { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #0ff; text-align: center; background: rgba(0,0,0,0.8); padding: 40px; border: 2px solid #0ff; cursor: pointer; }
+        body { margin: 0; overflow: hidden; background: #020205; font-family: sans-serif; }
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border: 2px solid #0ff; transform: translate(-50%, -50%); pointer-events: none; }
+        #instructions { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #0ff; background: rgba(0,0,0,0.8); cursor: pointer; z-index: 10; }
     </style>
 </head>
 <body>
     <div id="crosshair"></div>
-    <div id="ui">SYSTEM ONLINE | AMMO: ∞</div>
-    <div id="instructions"><h1>INITIALIZE NEURAL LINK</h1><p>CLICK TO START [WASD + MOUSE]</p></div>
+    <div id="instructions">
+        <h1>CLICK TO START</h1>
+        <p>W, A, S, D to MOVE | MOUSE to LOOK & SHOOT</p>
+    </div>
 
     <script type="importmap">
         { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
@@ -22,89 +23,103 @@
         import * as THREE from 'three';
         import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-        // 1. CYBER WORLD SETUP
+        // --- 1. SCENE & CAMERA ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x020205);
-        scene.fog = new THREE.FogExp2(0x020205, 0.15); // Add thick fog
-
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        // IMPORTANT: Set player height so you aren't in the floor
+        camera.position.y = 1.6; 
+
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // 2. THE GUN (Laser Rifle)
-        const gunGroup = new THREE.Group();
-        const body = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.5), new THREE.MeshStandardMaterial({ color: 0x111111 }));
-        const glow = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.02, 0.4), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
-        glow.position.z = -0.05;
-        gunGroup.add(body, glow);
-        gunGroup.position.set(0.3, -0.25, -0.5);
-        camera.add(gunGroup);
-        scene.add(camera);
+        // --- 2. LIGHTING ---
+        const light = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(light);
 
-        // 3. NEON GRID FLOOR
-        const grid = new THREE.GridHelper(200, 100, 0x00ffff, 0x222222);
+        // --- 3. THE FLOOR (Visual Grid) ---
+        // This makes it obvious when you are moving
+        const grid = new THREE.GridHelper(200, 50, 0x00ffff, 0x004444);
         scene.add(grid);
 
-        // 4. FLOATING DRONE TARGETS
-        const drones = [];
-        for(let i=0; i<20; i++) {
-            const drone = new THREE.Mesh(
-                new THREE.SphereGeometry(0.4, 8, 8), 
-                new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true })
-            );
-            drone.position.set(Math.random()*40-20, 1 + Math.random()*3, Math.random()*-40-10);
-            scene.add(drone);
-            drones.push(drone);
-        }
+        // --- 4. THE GUN ---
+        const gun = new THREE.Mesh(
+            new THREE.BoxGeometry(0.1, 0.1, 0.5),
+            new THREE.MeshStandardMaterial({ color: 0x333333 })
+        );
+        gun.position.set(0.3, -0.3, -0.6);
+        camera.add(gun);
+        scene.add(camera);
 
-        // 5. MOVEMENT & SHOOTING LOGIC
+        // --- 5. MOVEMENT CONTROLS ---
         const controls = new PointerLockControls(camera, document.body);
-        document.getElementById('instructions').addEventListener('click', () => controls.lock());
-        controls.addEventListener('lock', () => document.getElementById('instructions').style.display = 'none');
-        controls.addEventListener('unlock', () => document.getElementById('instructions').style.display = 'block');
+        const instructions = document.getElementById('instructions');
+
+        instructions.addEventListener('click', () => {
+            controls.lock();
+        });
+
+        controls.addEventListener('lock', () => instructions.style.display = 'none');
+        controls.addEventListener('unlock', () => instructions.style.display = 'flex');
 
         let moveFwd = false, moveBwd = false, moveL = false, moveR = false;
-        document.addEventListener('keydown', (e) => { if(e.code=='KeyW') moveFwd=true; if(e.code=='KeyS') moveBwd=true; if(e.code=='KeyA') moveL=true; if(e.code=='KeyD') moveR=true; });
-        document.addEventListener('keyup', (e) => { if(e.code=='KeyW') moveFwd=false; if(e.code=='KeyS') moveBwd=false; if(e.code=='KeyA') moveL=false; if(e.code=='KeyD') moveR=false; });
 
-        const raycaster = new THREE.Raycaster();
+        const onKeyDown = (e) => {
+            if (e.code === 'KeyW') moveFwd = true;
+            if (e.code === 'KeyS') moveBwd = true;
+            if (e.code === 'KeyA') moveL = true;
+            if (e.code === 'KeyD') moveR = true;
+        };
+        const onKeyUp = (e) => {
+            if (e.code === 'KeyW') moveFwd = false;
+            if (e.code === 'KeyS') moveBwd = false;
+            if (e.code === 'KeyA') moveL = false;
+            if (e.code === 'KeyD') moveR = false;
+        };
+
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('keyup', onKeyUp);
+
+        // --- 6. SHOOTING ---
         window.addEventListener('mousedown', () => {
-            if(!controls.isLocked) return;
-            
-            // Visual Recoil
-            gunGroup.position.z += 0.05;
-
-            raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
-            const hits = raycaster.intersectObjects(drones);
-            if(hits.length > 0) {
-                hits[0].object.scale.set(0,0,0); // Vaporize target
+            if (controls.isLocked) {
+                console.log("Pew!");
+                // Add a kickback effect
+                gun.position.z += 0.1;
             }
         });
 
-        // 6. GAME LOOP
+        // --- 7. ANIMATION LOOP ---
         const clock = new THREE.Clock();
+
         function animate() {
             requestAnimationFrame(animate);
-            const delta = clock.getDelta();
             
-            if(controls.isLocked) {
-                const speed = 5;
-                if(moveFwd) controls.moveForward(speed * delta);
-                if(moveBwd) controls.moveForward(-speed * delta);
-                if(moveL) controls.moveRight(-speed * delta);
-                if(moveR) controls.moveRight(speed * delta);
-                
-                // Smooth recoil recovery
-                gunGroup.position.z += ( -0.5 - gunGroup.position.z ) * 0.1;
+            if (controls.isLocked) {
+                const delta = clock.getDelta();
+                const moveSpeed = 10.0; // Speed of the player
+
+                if (moveFwd) controls.moveForward(moveSpeed * delta);
+                if (moveBwd) controls.moveForward(-moveSpeed * delta);
+                if (moveR) controls.moveRight(moveSpeed * delta);
+                if (moveL) controls.moveRight(-moveSpeed * delta);
+
+                // Smooth gun recoil return
+                gun.position.z += (-0.6 - gun.position.z) * 0.1;
             }
-            
-            // Make drones bob up and down
-            drones.forEach(d => d.position.y += Math.sin(Date.now() * 0.002) * 0.005);
-            
+
             renderer.render(scene, camera);
         }
+
         animate();
+
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
     </script>
 </body>
 </html>
