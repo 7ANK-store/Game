@@ -1,31 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"><title>CYBER-STRIKE PRO</title>
+    <meta charset="UTF-8"><title>CYBER-STRIKE LIGHT</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #020205; font-family: 'Courier New', monospace; }
-        
-        /* NEW VECTOR CROSSHAIR */
+        body { margin: 0; overflow: hidden; background: #0a0a15; font-family: 'Courier New', monospace; }
         #crosshair {
             position: absolute; top: 50%; left: 50%;
             width: 20px; height: 20px;
             transform: translate(-50%, -50%);
             pointer-events: none;
         }
-        #crosshair::before, #crosshair::after {
-            content: ''; position: absolute; background: #0ff; box-shadow: 0 0 5px #0ff;
-        }
-        #crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; } /* Horizontal */
-        #crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; } /* Vertical */
-
+        #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #0ff; box-shadow: 0 0 5px #0ff; }
+        #crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; }
+        #crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }
         #ui { position: absolute; bottom: 20px; left: 20px; color: #0ff; font-size: 18px; text-shadow: 0 0 8px #0ff; }
-        #instructions { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #0ff; background: rgba(0,0,0,0.9); cursor: pointer; z-index: 10; text-align: center; }
+        #instructions { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #0ff; background: rgba(0,0,0,0.7); cursor: pointer; z-index: 10; text-align: center; }
     </style>
 </head>
 <body>
     <div id="crosshair"></div>
     <div id="ui">THREATS NEUTRALIZED: <span id="score">0</span></div>
-    <div id="instructions"><h1>SYSTEM BOOT COMPLETE</h1><p>CLICK TO ENGAGE NEURAL LINK</p></div>
+    <div id="instructions"><h1>SYSTEM READY</h1><p>CLICK TO ENGAGE</p></div>
 
     <script type="importmap">
         { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
@@ -35,51 +30,56 @@
         import * as THREE from 'three';
         import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-        // --- 1. CORE SETUP ---
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x020205, 0.08);
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        scene.background = new THREE.Color(0x101025); // Lighter background
+        scene.fog = new THREE.FogExp2(0x101025, 0.02); // Thinner fog
         
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-        const grid = new THREE.GridHelper(500, 100, 0x00ffff, 0x002222);
+        // --- BRIGHTER LIGHTING ---
+        const ambient = new THREE.AmbientLight(0xffffff, 1.2); // Powerful base light
+        scene.add(ambient);
+        
+        const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+        sun.position.set(5, 10, 7);
+        scene.add(sun);
+
+        // Muzzle Flash Light (Starts at 0 intensity)
+        const flash = new THREE.PointLight(0x00ffff, 0, 10);
+        flash.position.set(0.4, -0.2, -1);
+        camera.add(flash);
+
+        const grid = new THREE.GridHelper(500, 100, 0x00ffff, 0x333333);
         scene.add(grid);
 
-        // --- 2. SMOOTH MOVEMENT VARIABLES ---
-        let moveFwd = false, moveBwd = false, moveL = false, moveR = false;
-        let canJump = false;
-        
+        // --- PLAYER & GUN ---
         const velocity = new THREE.Vector3();
         const direction = new THREE.Vector3();
-        const PLAYER_HEIGHT = 1.6;
-        camera.position.y = PLAYER_HEIGHT;
+        let moveFwd = false, moveBwd = false, moveL = false, moveR = false, canJump = false;
+        camera.position.y = 1.6;
 
-        // --- 3. THE GUN ---
         const gunContainer = new THREE.Group();
-        const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.6), new THREE.MeshStandardMaterial({ color: 0x111111 }));
-        const gunGlow = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.5), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
-        gunGlow.position.z = -0.1;
-        gunContainer.add(gunBody, gunGlow);
+        const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.6), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+        gunContainer.add(gunBody);
         gunContainer.position.set(0.4, -0.3, -0.6);
         camera.add(gunContainer);
         scene.add(camera);
 
-        // --- 4. TARGETS ---
+        // --- TARGETS ---
         const targets = [];
         let score = 0;
-        for(let i=0; i<12; i++) {
-            const t = new THREE.Mesh(new THREE.OctahedronGeometry(0.6), new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true }));
-            t.position.set(Math.random()*40-20, 1, Math.random()*-40-10);
+        for(let i=0; i<15; i++) {
+            const t = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 16), new THREE.MeshStandardMaterial({ color: 0xff00ff, emissive: 0x330033 }));
+            t.position.set(Math.random()*60-30, 1, Math.random()*-60-10);
             t.userData = { vY: 0, phase: Math.random() * 5 };
             scene.add(t);
             targets.push(t);
         }
 
-        // --- 5. CONTROLS ---
+        // --- CONTROLS ---
         const controls = new PointerLockControls(camera, document.body);
         document.getElementById('instructions').addEventListener('click', () => controls.lock());
         controls.addEventListener('lock', () => document.getElementById('instructions').style.display = 'none');
@@ -99,61 +99,59 @@
             if (e.code === 'KeyD') moveR = false;
         });
 
-        // --- 6. SHOOTING ---
+        // --- SHOOTING WITH FLASH ---
         const raycaster = new THREE.Raycaster();
         window.addEventListener('mousedown', () => {
             if (!controls.isLocked) return;
-            gunContainer.position.z += 0.15; // Kickback
+            
+            // Recoil + Flash
+            gunContainer.position.z += 0.2;
+            flash.intensity = 15; // Bright flash!
+
             raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
             const hits = raycaster.intersectObjects(targets);
             if(hits.length > 0) {
-                hits[0].object.position.set(Math.random()*40-20, 1, Math.random()*-40-20);
+                hits[0].object.position.set(Math.random()*60-30, 1, Math.random()*-60-30);
                 score++;
                 document.getElementById('score').innerText = score;
             }
         });
 
-        // --- 7. THE ANIMATION LOOP ---
+        // --- LOOP ---
         const clock = new THREE.Clock();
-
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
 
             if (controls.isLocked) {
-                // Apply Friction (Stops the sliding)
                 velocity.x -= velocity.x * 10.0 * delta;
                 velocity.z -= velocity.z * 10.0 * delta;
-                velocity.y -= 30.0 * delta; // Gravity
+                velocity.y -= 30.0 * delta;
 
                 direction.z = Number(moveFwd) - Number(moveBwd);
                 direction.x = Number(moveR) - Number(moveL);
                 direction.normalize();
 
-                // Apply Acceleration
                 if (moveFwd || moveBwd) velocity.z -= direction.z * 150.0 * delta;
                 if (moveL || moveR) velocity.x -= direction.x * 150.0 * delta;
 
-                // Apply Velocity to Movement
                 controls.moveRight(-velocity.x * delta);
                 controls.moveForward(-velocity.z * delta);
 
-                // Vertical (Jump) Logic
                 camera.position.y += (velocity.y * delta);
-                if (camera.position.y < PLAYER_HEIGHT) {
+                if (camera.position.y < 1.6) {
                     velocity.y = 0;
-                    camera.position.y = PLAYER_HEIGHT;
+                    camera.position.y = 1.6;
                     canJump = true;
                 }
 
-                // Smooth gun recoil recovery
+                // Fade out muzzle flash and return recoil
+                flash.intensity *= 0.8; 
                 gunContainer.position.z += (-0.6 - gunContainer.position.z) * 0.1;
             }
 
-            // Animate Targets
             targets.forEach(t => {
-                t.rotation.y += delta;
-                t.position.y = 1.5 + Math.sin(Date.now() * 0.002 + t.userData.phase) * 1;
+                t.position.y = 2 + Math.sin(Date.now() * 0.002 + t.userData.phase) * 1.2;
             });
 
             renderer.render(scene, camera);
