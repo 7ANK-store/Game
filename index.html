@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Web Shooter</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        /* THE CROSSHAIR */
+        #crosshair {
+            position: absolute; top: 50%; left: 50%;
+            width: 20px; height: 20px;
+            border: 2px solid white; border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        #instructions {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: white; font-family: sans-serif; text-align: center;
+            background: rgba(0,0,0,0.5); padding: 20px; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="crosshair"></div>
+    <div id="instructions"><h1>CLICK TO PLAY</h1><p>(WASD to Move, MOUSE to Shoot)</p></div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        // 1. SCENE SETUP
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb); // Sky blue
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // 2. GUN SETUP (A simple grey box)
+        const gun = new THREE.Mesh(
+            new THREE.BoxGeometry(0.1, 0.1, 0.4),
+            new THREE.MeshStandardMaterial({ color: 0x222222 })
+        );
+        gun.position.set(0.2, -0.2, -0.5);
+        camera.add(gun);
+        scene.add(camera);
+
+        // 3. TARGETS (Random boxes to shoot)
+        const targets = [];
+        for(let i=0; i<10; i++) {
+            const box = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshStandardMaterial({color: 0xff0000}));
+            box.position.set(Math.random()*20-10, 1, Math.random()*-20-5);
+            scene.add(box);
+            targets.push(box);
+        }
+
+        // 4. LIGHT & FLOOR
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const sun = new THREE.DirectionalLight(0xffffff, 1);
+        sun.position.set(5, 10, 7);
+        scene.add(sun);
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshStandardMaterial({color: 0x44bb44}));
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        // 5. CONTROLS & SHOOTING
+        const controls = new PointerLockControls(camera, document.body);
+        document.getElementById('instructions').addEventListener('click', () => controls.lock());
+        controls.addEventListener('lock', () => document.getElementById('instructions').style.display = 'none');
+        controls.addEventListener('unlock', () => document.getElementById('instructions').style.display = 'block');
+
+        const raycaster = new THREE.Raycaster();
+        window.addEventListener('mousedown', () => {
+            if(!controls.isLocked) return;
+            
+            // Shooting Logic
+            raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+            const hits = raycaster.intersectObjects(targets);
+            if(hits.length > 0) {
+                hits[0].object.position.y = -10; // "Kill" target by hiding it
+            }
+        });
+
+        // 6. RENDER LOOP
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
